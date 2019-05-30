@@ -88,18 +88,18 @@ typedef struct xen_argo_send_addr
 typedef struct xen_argo_ring
 {
     /* Guests should use atomic operations to access rx_ptr */
-    uint32_t rx_ptr;
+    volatile uint32_t rx_ptr;
     /* Guests should use atomic operations to access tx_ptr */
-    uint32_t tx_ptr;
+    volatile uint32_t tx_ptr;
     /*
      * Header space reserved for later use. Align the start of the ring to a
      * multiple of the message slot size.
      */
     uint8_t reserved[56];
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
-    uint8_t ring[];
+    volatile uint8_t ring[];
 #elif defined(__GNUC__)
-    uint8_t ring[0];
+    volatile uint8_t ring[0];
 #endif
 } xen_argo_ring_t;
 

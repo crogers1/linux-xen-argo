@@ -94,7 +94,7 @@
 
 #define MOAN do { printk(KERN_ERR "%s:%d MOAN called\n",__FILE__,__LINE__); } while (1==0)
 
-#define DEFAULT_RING_SIZE     (XEN_ARGO_ROUNDUP((((PAGE_SIZE)*32) - sizeof(xen_argo_ring_t)-XEN_ARGO_ROUNDUP(1))))
+#define DEFAULT_RING_SIZE     (XEN_ARGO_ROUNDUP((((PAGE_SIZE)*1) - sizeof(xen_argo_ring_t)-XEN_ARGO_ROUNDUP(1))))
 
 #define DEBUG_ORANGE(a) do { printk(KERN_ERR  "%s %s %s:%d cpu%d pid %d\n",a,__PRETTY_FUNCTION__,"argo.c",__LINE__,raw_smp_processor_id(),current->pid); } while (1==0)
 
@@ -1642,8 +1642,10 @@ connector_state_machine(struct argo_private *p, struct argo_stream_header *sh)
 static void
 acceptor_state_machine(struct argo_private *p, struct argo_stream_header *sh)
 {
+	DEBUG_APPLE;
     if ( (sh->flags & ARGO_SHF_RST) && ((p->state == ARGO_STATE_ACCEPTED)) )
     {
+		DEBUG_APPLE;
         p->state = ARGO_STATE_DISCONNECTED;
         wake_up_interruptible_all(&p->readq);
         wake_up_interruptible_all(&p->writeq);
@@ -1677,6 +1679,13 @@ connector_interrupt(struct ring *r)
         recover_ring(r);
         return ret;
     }
+
+    if ((protocol != ARGO_PROTO_STREAM) || (msg_len < sizeof (sh)))
+	{
+		/*wrong protocol bin it */
+		(void) argo_copy_out (r->ring, r->len, NULL, NULL, NULL, 0, 1);
+		return ret;
+	}
 
     /* This is a connector: no-one should send SYN, so send RST back */
     if ( sh.flags & ARGO_SHF_SYN )   
@@ -2297,8 +2306,8 @@ argo_stream_sendvto_from_sponsor(struct argo_private *p,
 //The EAGAIN will cause xen to send an interrupt which will via the pending_xmit_list and writeq wake us up
         ret = wait_event_interruptible(p->writeq,
                   ((ts_ret = argo_try_sendv_sponsor(p, dest, iovs, niov, len,
-                                                    protocol)) != -EAGAIN) ||
-                  !stream_connected(p));
+                                                    protocol)) != -EAGAIN)
+				  || !stream_connected(p));
         DEBUG_APPLE;
 
         if ( ret )
@@ -2615,7 +2624,7 @@ argo_recv_stream(struct argo_private *p, void *_buf, int len, int recv_flags,
     {
 
         DEBUG_APPLE;
-        spin_lock_irqsave(&p->pending_recv_lock, flags);
+        argo_spin_lock_irqsave(&p->pending_recv_lock, flags);
         DEBUG_APPLE;
         while ( !list_empty(&p->pending_recv_list) && len )
         {
@@ -2655,7 +2664,7 @@ argo_recv_stream(struct argo_private *p, void *_buf, int len, int recv_flags,
                     pending->data_ptr, pending->data);
                 /* FIXME: error exit action here? */
 
-            spin_lock_irqsave(&p->pending_recv_lock, flags);
+            argo_spin_lock_irqsave(&p->pending_recv_lock, flags);
 
             if ( !eat )
             {
@@ -2703,7 +2712,8 @@ argo_recv_stream(struct argo_private *p, void *_buf, int len, int recv_flags,
                 return count;
             } else {
                 /* sshargo fails here */
-                printk(KERN_ERR "EPIPE5\n");
+				DEBUG_APPLE;
+                DEBUG_ORANGE("EPIPE5");
                 return -EPIPE;
             }
         }
@@ -3116,7 +3126,7 @@ allocate_fd_with_private (void *private)
     // This file should have the argo fops attached to it and
     // gets installed to the corresponding fd below
     printk(KERN_ERR "FINDME: creating argo file");
-    f = alloc_file_pseudo(ind, argo_mnt, name, FMODE_READ | FMODE_WRITE, &argo_fops_stream);
+    f = alloc_file_pseudo(ind, argo_mnt, name, O_RDWR, &argo_fops_stream);
     if ( !f )
     {
       //FIXME putback fd?
@@ -3124,7 +3134,7 @@ allocate_fd_with_private (void *private)
     }
 
     f->private_data = private;
-    f->f_flags = O_RDWR;
+    //f->f_flags = O_RDWR;
  
     fd_install (fd, f);
 
@@ -3676,7 +3686,7 @@ argo_write(struct file *f,
     struct argo_private *p = f->private_data;
     int nonblock = f->f_flags & O_NONBLOCK;
 
-    printk(KERN_ERR "entering argo_write...");
+    DEBUG_ORANGE("entering argo_write...");
 
     return argo_sendto(p, buf, count, 0, NULL, nonblock);
 }
@@ -3687,7 +3697,7 @@ argo_read(struct file *f, char __user * buf, size_t count, loff_t * ppos)
     struct argo_private *p = f->private_data;
     int nonblock = f->f_flags & O_NONBLOCK;
 
-    printk(KERN_ERR "entering argo_read...");
+    DEBUG_ORANGE("entering argo_read...");
 
     return argo_recvfrom(p, (void *) buf, count, 0, NULL, nonblock);
 }
